@@ -1,5 +1,5 @@
 // MULTIPEPPINS — elenco degli strumenti (parte 2: converti, modifica, confronta)
-import { PDFLib, loadPdfLib, savePdf, renderPage, canvasToBytes, parseRanges, toWinAnsi, hexToRgb, readBytes, baseName, makeZip, loadScript, safeScale, imagesToPdf, VENDOR_URL } from './core.js';
+import { PDFLib, loadPdfLib, savePdf, renderPage, canvasToBytes, parseRanges, toWinAnsi, hexToRgb, readBytes, baseName, makeZip, loadScript, safeScale, imagesToPdf, LIB_URLS } from './core.js';
 import { createEditor, prepareImage } from './editor.js';
 import { htmlToPdf, PAGE_SIZES } from './layout.js';
 import { el, icon, toast } from './ui.js';
@@ -436,7 +436,7 @@ const CONVERT_FROM = [
     async run({ files, opts, progress }) {
       const f = files[0];
       progress(0.02, 'Caricamento del convertitore…');
-      const D = await loadScript(VENDOR_URL + 'docx.iife.js', 'docx');
+      const D = await loadScript(LIB_URLS.docx, 'docx');
       const first = await f.pdf.getPage(1);
       const vp = first.getViewport({ scale: 1, rotation: first.rotate });
       const tw = (pt) => Math.round(pt * 20);
@@ -490,7 +490,7 @@ const CONVERT_FROM = [
     async run({ files, opts, progress }) {
       const f = files[0];
       progress(0.02, 'Caricamento del convertitore…');
-      const P = await loadScript(VENDOR_URL + 'pptxgen.bundle.js', 'PptxGenJS');
+      const P = await loadScript(LIB_URLS.pptx, 'PptxGenJS');
       const pptx = new P();
       const first = await f.pdf.getPage(1);
       const vp = first.getViewport({ scale: 1, rotation: first.rotate });

@@ -1,8 +1,36 @@
 // MULTIPEPPINS — funzioni di base condivise da tutti gli strumenti
-import * as pdfjsLib from '../vendor/pdf.min.mjs';
-
+const loaded = {};
 const VENDOR = new URL('../vendor/', import.meta.url).href;
-pdfjsLib.GlobalWorkerOptions.workerSrc = VENDOR + 'pdf.worker.min.mjs';
+const PDFJS_VER = '6.2.108';
+const CDN = {
+  pdfjs: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VER}/build/pdf.min.mjs`,
+  pdfjsWorker: `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VER}/build/pdf.worker.min.mjs`,
+  pdfLib: ['https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js', 'https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js', 'https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js'],
+  docx: ['https://cdn.jsdelivr.net/npm/docx@9.8.1/dist/index.iife.js', 'https://unpkg.com/docx@9.8.1/dist/index.iife.js'],
+  pptx: ['https://cdn.jsdelivr.net/npm/pptxgenjs@4.0.1/dist/pptxgen.bundle.js', 'https://unpkg.com/pptxgenjs@4.0.1/dist/pptxgen.bundle.js'],
+};
+export const LIB_URLS = { docx: [VENDOR + 'docx.iife.js', ...CDN.docx], pptx: [VENDOR + 'pptxgen.bundle.js', ...CDN.pptx] };
+
+// Le librerie si caricano dalla cartella vendor; se manca (es. pagina pubblicata) si usano le CDN
+let LOCAL_PDFJS = true;
+let pdfjsLib;
+try {
+  pdfjsLib = await import('../vendor/pdf.min.mjs');
+} catch {
+  LOCAL_PDFJS = false;
+  pdfjsLib = await import(CDN.pdfjs);
+}
+if (LOCAL_PDFJS) {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = VENDOR + 'pdf.worker.min.mjs';
+} else {
+  try {
+    const blobUrl = URL.createObjectURL(new Blob([`import "${CDN.pdfjsWorker}";`], { type: 'text/javascript' }));
+    pdfjsLib.GlobalWorkerOptions.workerPort = new Worker(blobUrl, { type: 'module' });
+  } catch {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = CDN.pdfjsWorker;
+  }
+}
+await loadScript([VENDOR + 'pdf-lib.min.js', ...CDN.pdfLib], 'PDFLib');
 
 export const PDFLib = window.PDFLib;
 export { pdfjsLib };
@@ -27,11 +55,13 @@ export async function openPdfJs(bytes, password) {
   const task = pdfjsLib.getDocument({
     data: bytes.slice(),
     password: password || undefined,
-    cMapUrl: VENDOR + 'pdfjs/cmaps/',
-    cMapPacked: true,
-    standardFontDataUrl: VENDOR + 'pdfjs/standard_fonts/',
-    wasmUrl: VENDOR + 'pdfjs/wasm/',
-    iccUrl: VENDOR + 'pdfjs/iccs/',
+    ...(LOCAL_PDFJS ? {
+      cMapUrl: VENDOR + 'pdfjs/cmaps/',
+      cMapPacked: true,
+      standardFontDataUrl: VENDOR + 'pdfjs/standard_fonts/',
+      wasmUrl: VENDOR + 'pdfjs/wasm/',
+      iccUrl: VENDOR + 'pdfjs/iccs/',
+    } : { useSystemFonts: true }),
     isEvalSupported: false,
     enableXfa: false,
   });
@@ -268,7 +298,6 @@ export async function saveFile(name, data, mime) {
 }
 
 /* ---------------- Librerie esterne caricate solo quando servono ---------------- */
-const loaded = {};
 export function loadScript(urls, globalName) {
   if (window[globalName]) return Promise.resolve(window[globalName]);
   if (loaded[globalName]) return loaded[globalName];
