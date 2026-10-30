@@ -1,14 +1,9 @@
 // MULTIPEPPINS — editor visuale delle pagine: testo, immagini, forme, disegno, firme, censura
 import { PDFLib, renderPage, toWinAnsi, hexToRgb, loadPdfLib, savePdf, canvasToBytes, readBytes } from './core.js';
 import { el, icon, toast, modal } from './ui.js';
+import { FONTS, fontCss, fontReady, embedFont, textFor, isEmbeddedFont } from './fonts.js';
 
 const { degrees, StandardFonts, rgb } = PDFLib;
-const FONT_CSS = { Helvetica: 'Helvetica, Arial, sans-serif', Times: '"Times New Roman", Times, serif', Courier: '"Courier New", Courier, monospace' };
-const FONT_STD = {
-  Helvetica: ['Helvetica', 'HelveticaBold'],
-  Times: ['TimesRoman', 'TimesRomanBold'],
-  Courier: ['Courier', 'CourierBold'],
-};
 let SIGNATURES = []; // firme create in questa sessione: [{url, bytes}]
 
 export function createEditor(ctx, { mode = 'edit' } = {}) {
@@ -19,7 +14,7 @@ export function createEditor(ctx, { mode = 'edit' } = {}) {
   let tool = mode === 'redact' ? 'redact' : 'select';
   let selected = null;
   let pending = null; // immagine/firma da posizionare
-  const defaults = { textSize: 14, textColor: '#1d1b2c', font: 'Helvetica', bold: false, rectColor: '#3b5bdb', rectOpacity: 0.35, drawColor: '#1c39bb', drawWidth: 2, hlColor: '#ffe066' };
+  const defaults = { textSize: 14, textColor: '#1d1b2c', font: 'Helvetica', bold: false, italic: false, rectColor: '#3b5bdb', rectOpacity: 0.35, drawColor: '#1c39bb', drawWidth: 2, hlColor: '#ffe066' };
 
   /* ---------- Barra strumenti ---------- */
   const toolsBar = el('div', { class: 'ed-tools' });
@@ -90,14 +85,17 @@ export function createEditor(ctx, { mode = 'edit' } = {}) {
       props.append(el('label', {}, label + ' '), i);
     };
     if (kind === 'text') {
-      const f = el('select', { class: 'sel' }, Object.keys(FONT_CSS).map((k) => el('option', { value: k, selected: target.font === k }, k)));
+      const f = el('select', { class: 'sel', title: 'Carattere' }, FONTS.map((o) => el('option', { value: o.key, selected: target.font === o.key, style: { fontFamily: fontCss(o.key) } }, o.label)));
       f.addEventListener('change', () => { target.font = f.value; if (it) refreshItem(it); });
       props.append(f);
       num('Dim.', it ? 'size' : 'textSize', 4, 200);
       color('Colore', it ? 'color' : 'textColor');
       const b = el('input', { type: 'checkbox', checked: !!target.bold });
       b.addEventListener('change', () => { target.bold = b.checked; if (it) refreshItem(it); });
-      props.append(el('label', { class: 'check', style: { margin: 0 } }, b, 'Grassetto'));
+      props.append(el('label', { class: 'check', style: { margin: 0 } }, b, el('b', {}, 'Grassetto')));
+      const c = el('input', { type: 'checkbox', checked: !!target.italic });
+      c.addEventListener('change', () => { target.italic = c.checked; if (it) refreshItem(it); });
+      props.append(el('label', { class: 'check', style: { margin: 0 } }, c, el('i', {}, 'Corsivo')));
     } else if (kind === 'rect') {
       color('Colore', it ? 'color' : 'rectColor');
       if (!it || it.type === 'rect') {
@@ -125,7 +123,16 @@ export function createEditor(ctx, { mode = 'edit' } = {}) {
 
   /* ---------- Pagine ---------- */
   const pagesWrap = el('div', { class: 'ed-pages' });
-  const wrap = el('div', { class: 'ed-wrap' }, toolsBar, props, pagesWrap);
+  // barra strumenti + proprietà: resta in alto mentre scorri le pagine
+  const head = el('div', { class: 'ed-head' }, toolsBar, props);
+  const wrap = el('div', { class: 'ed-wrap' }, head, pagesWrap);
+  const onScroll = () => {
+    const top = parseFloat(getComputedStyle(head).top) || 0;
+    head.classList.toggle('stuck', head.isConnected && head.getBoundingClientRect().top <= top + 0.5 && window.scrollY > 0);
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  const stopScroll = () => { if (!head.isConnected) window.removeEventListener('scroll', onScroll); };
+  window.addEventListener('hashchange', () => setTimeout(stopScroll, 0));
   ctx.stage.append(wrap);
   const io = new IntersectionObserver((ens) => ens.forEach((en) => { if (en.isIntersecting) { const p = en.target.__p; io.unobserve(en.target); paintPage(p); } }), { rootMargin: '600px' });
 
@@ -177,7 +184,7 @@ export function createEditor(ctx, { mode = 'edit' } = {}) {
       const pt = rel(p, e);
       if (tool === 'select') { select(null); return; }
       if (tool === 'text') {
-        const it = addItem(p, { type: 'text', x: pt.x, y: pt.y, text: 'Testo', size: defaults.textSize, color: defaults.textColor, font: defaults.font, bold: defaults.bold });
+        const it = addItem(p, { type: 'text', x: pt.x, y: pt.y, text: 'Testo', size: defaults.textSize, color: defaults.textColor, font: defaults.font, bold: defaults.bold, italic: defaults.italic });
         setTool('select');
         select(it);
         startEditing(it, true);
@@ -185,7 +192,7 @@ export function createEditor(ctx, { mode = 'edit' } = {}) {
       }
       if (tool === 'place' && pending) {
         if (pending.kind === 'text') {
-          const it = addItem(p, { type: 'text', x: pt.x, y: pt.y, text: pending.text, size: defaults.textSize, color: defaults.textColor, font: defaults.font, bold: false });
+          const it = addItem(p, { type: 'text', x: pt.x, y: pt.y, text: pending.text, size: defaults.textSize, color: defaults.textColor, font: defaults.font, bold: false, italic: false });
           pending = null; setTool('select'); select(it); return;
         }
         const wPt = Math.min(p.vp1.width * 0.6, pending.small ? 70 : pending.isSig ? 170 : 200);
@@ -362,7 +369,9 @@ export function createEditor(ctx, { mode = 'edit' } = {}) {
     n.style.left = it.x * 100 + '%';
     n.style.top = it.y * 100 + '%';
     if (it.type === 'text') {
-      Object.assign(it.ed.style, { fontSize: it.size * p.pxPerPt + 'px', color: it.color, fontFamily: FONT_CSS[it.font], fontWeight: it.bold ? '700' : '400' });
+      const emb = isEmbeddedFont(it.font);
+      Object.assign(it.ed.style, { fontSize: it.size * p.pxPerPt + 'px', color: it.color, fontFamily: fontCss(it.font, it.bold, it.italic), fontWeight: it.bold && !emb ? '700' : '400', fontStyle: it.italic && !emb ? 'italic' : 'normal' });
+      if (emb) fontReady(it.font, it.bold, it.italic).then(() => { if (it.ed.isConnected) it.ed.style.fontFamily = fontCss(it.font, it.bold, it.italic); });
       n.style.width = n.style.height = '';
       return;
     }
@@ -550,12 +559,7 @@ export function createEditor(ctx, { mode = 'edit' } = {}) {
     if (mode === 'redact') return applyRedact(bytes, progress);
     const doc = await loadPdfLib(bytes);
     const docPages = doc.getPages();
-    const fontCache = {};
-    const getFont = async (fam, bold) => {
-      const k = fam + bold;
-      if (!fontCache[k]) fontCache[k] = await doc.embedFont(StandardFonts[FONT_STD[fam][bold ? 1 : 0]]);
-      return fontCache[k];
-    };
+    const getFont = (fam, bold, italic) => embedFont(doc, fam, bold, italic);
     const imgCache = new Map();
     const targets = (p) => (options.allPages ? pages : [p]);
     for (const p of pages) {
@@ -566,8 +570,8 @@ export function createEditor(ctx, { mode = 'edit' } = {}) {
           const toPdf = (fx, fy) => vp.convertToPdfPoint(fx * vp.width, fy * vp.height);
           const rot = degrees(tp.rot % 360);
           if (it.type === 'text') {
-            const font = await getFont(it.font, it.bold);
-            const text = toWinAnsi(it.text);
+            const font = await getFont(it.font, it.bold, it.italic);
+            const text = textFor(font, it.text);
             const lineH = it.size * 1.2;
             const [ox, oy] = toPdf(it.x, it.y + (it.size * 0.1 + it.size * 0.86) / vp.height);
             page.drawText(text, { x: ox, y: oy, size: it.size, font, color: hexToRgb(it.color), lineHeight: lineH, rotate: rot });

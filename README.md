@@ -32,6 +32,7 @@ e aprire `http://localhost:8000`. Funziona anche su GitHub Pages, Netlify, Cloud
 - `js/app.js` — home, pagina strumento, risultati
 - `js/tools.js`, `js/tools2.js`, `js/tools3.js` — gli strumenti
 - `js/pdfa.js` — conversione in PDF/A (metadati XMP, profilo sRGB, testo invisibile con carattere incorporato)
+- `js/fonts.js` — caratteri: i 3 standard del PDF più Arial, Times New Roman, Courier New, Calibri, Cambria (equivalenti liberi), DejaVu e Poppins, incorporati nei PDF con accenti ed €
 - `js/pptx.js` — lettore PowerPoint (forme, testi, immagini, tabelle) → PDF
 - `js/editor.js` — editor visuale (modifica, firma, censura)
 - `js/pages.js` — miniature e riordino pagine
