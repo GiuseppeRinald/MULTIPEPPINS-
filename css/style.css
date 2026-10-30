@@ -98,7 +98,7 @@ footer { text-align: center; color: var(--ink-3); font-size: 13px; padding: 10px
 .back-link:hover { background: var(--bg); }
 
 .workspace { display: grid; grid-template-columns: 1fr 340px; min-height: calc(100vh - 58px); }
-.stage { padding: 18px; overflow: auto; position: relative; }
+.stage { padding: 18px; position: relative; min-width: 0; }
 .side { background: #fff; border-left: 1px solid var(--line); display: flex; flex-direction: column; position: sticky; top: 58px; height: calc(100vh - 58px); }
 .side-head { padding: 16px 18px 6px; }
 .side-head h2 { margin: 0; font-size: 20px; letter-spacing: -.01em; }
@@ -227,11 +227,17 @@ input[type=color] { width: 100%; height: 40px; border: 1px solid var(--line); bo
 
 /* ---------- Editor ---------- */
 .ed-wrap { display: flex; flex-direction: column; gap: 10px; }
-.ed-tools { display: flex; flex-wrap: wrap; gap: 6px; position: sticky; top: 0; z-index: 5; background: var(--bg); padding: 4px 0 8px; }
+.ed-head { position: sticky; top: 58px; z-index: 20; display: flex; flex-direction: column; gap: 8px; background: var(--bg); padding: 6px 0 8px; margin: -6px 0 0; transition: opacity .18s, box-shadow .18s; }
+.ed-head.stuck { box-shadow: 0 8px 16px -10px rgba(29, 27, 44, .35); border-bottom: 1px solid var(--line); }
+@media (hover: hover) {
+  .ed-head.stuck { opacity: .6; }
+  .ed-head.stuck:hover, .ed-head.stuck:focus-within { opacity: 1; }
+}
+.ed-tools { display: flex; flex-wrap: wrap; gap: 6px; }
 .ed-tool { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 8px 11px; font-weight: 600; font-size: 13px; display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); }
 .ed-tool.on { background: var(--brand); color: #fff; border-color: var(--brand); }
 .ed-tool svg { width: 16px; height: 16px; }
-.ed-pages { display: flex; flex-direction: column; align-items: center; gap: 30px; padding-top: 22px; }
+.ed-pages { max-width: 100%; overflow-x: auto; display: flex; flex-direction: column; align-items: center; gap: 30px; padding-top: 22px; }
 .ed-page { position: relative; box-shadow: 0 2px 12px rgba(0, 0, 0, .15); background: #fff; touch-action: pan-y; }
 .ed-page canvas.bg { display: block; width: 100%; height: 100%; }
 .ed-page .lbl { position: absolute; top: -22px; left: 0; font-size: 12px; color: var(--ink-3); font-weight: 600; }

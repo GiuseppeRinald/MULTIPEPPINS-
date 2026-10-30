@@ -4,6 +4,7 @@ import { createEditor, prepareImage } from './editor.js';
 import { htmlToPdf, PAGE_SIZES } from './layout.js';
 import { runOcr, OCR_LANGS, lazyOcr, ocrPdfPage } from './ocr.js';
 import { el, icon, toast } from './ui.js';
+import { FONT_OPTIONS, embedFont, textFor } from './fonts.js';
 import { pdfOut, outName, pagesOption, pickPages, pageFrame, drawPageFit, decodeToCanvas, pageLines, groupLines, linesToParagraphs, escapeXml } from './helpers.js';
 
 const { PDFDocument, StandardFonts, degrees, rgb, PDFName, PDFBool, PDFTextField, PDFCheckBox, PDFDropdown, PDFRadioGroup, PDFOptionList } = PDFLib;
@@ -730,8 +731,6 @@ function drawImageVisual(page, img, { x, y, w, h, opacity, rotateDeg = 0, frame 
   page.drawImage(img, { x: p.x, y: p.y, width: w, height: h, opacity, rotate: degrees(frame.rot + rotateDeg) });
 }
 
-const FONT_OPTS = [{ value: 'Helvetica', label: 'Sans' }, { value: 'Times', label: 'Serif' }, { value: 'Courier', label: 'Mono' }];
-const FONT_STD = { Helvetica: ['Helvetica', 'HelveticaBold'], Times: ['TimesRoman', 'TimesRomanBold'], Courier: ['Courier', 'CourierBold'] };
 
 function imagePickField(key) {
   return (v, set) => {
@@ -783,7 +782,7 @@ const EDIT = [
     options: [
       { key: 'kind', type: 'seg', label: 'Tipo', default: 'text', options: [{ value: 'text', label: 'Testo' }, { value: 'image', label: 'Immagine' }] },
       { key: 'text', type: 'text', label: 'Testo', default: 'RISERVATO', showIf: (v) => v.kind === 'text' },
-      { key: 'font', type: 'seg', label: 'Carattere', default: 'Helvetica', options: FONT_OPTS, showIf: (v) => v.kind === 'text' },
+      { key: 'font', type: 'select', label: 'Carattere', default: 'Helvetica', options: FONT_OPTIONS, showIf: (v) => v.kind === 'text' },
       { key: 'bold', type: 'checkbox', label: 'Grassetto', default: true, showIf: (v) => v.kind === 'text' },
       { key: 'fontSize', type: 'number', label: 'Dimensione', default: 60, min: 6, max: 300, showIf: (v) => v.kind === 'text' },
       { key: 'color', type: 'color', label: 'Colore', default: '#e03131', showIf: (v) => v.kind === 'text' },
@@ -801,10 +800,10 @@ const EDIT = [
       for (let fi = 0; fi < files.length; fi++) {
         progress(fi / files.length, files[fi].name);
         const doc = await loadPdfLib(files[fi].bytes);
-        const font = await doc.embedFont(StandardFonts[FONT_STD[opts.font][opts.bold ? 1 : 0]]);
+        const font = await embedFont(doc, opts.font, !!opts.bold);
         const img = opts.kind === 'image' ? (opts.image.mime === 'png' ? await doc.embedPng(opts.image.bytes) : await doc.embedJpg(opts.image.bytes)) : null;
         const pages = doc.getPages();
-        const text = toWinAnsi(opts.text || '');
+        const text = textFor(font, opts.text || '');
         const op = opts.opacity / 100;
         for (const n of pickPages(opts, pages.length)) {
           const page = pages[n - 1];
@@ -852,7 +851,7 @@ const EDIT = [
       { key: 'start', type: 'number', label: 'Primo numero', default: 1, min: 0 },
       { key: 'skipFirst', type: 'checkbox', label: 'Non numerare la prima pagina (copertina)', default: false },
       { key: 'margin', type: 'seg', label: 'Margine', default: 'm', options: [{ value: 's', label: 'Piccolo' }, { value: 'm', label: 'Medio' }, { value: 'l', label: 'Grande' }] },
-      { key: 'font', type: 'seg', label: 'Carattere', default: 'Helvetica', options: FONT_OPTS },
+      { key: 'font', type: 'select', label: 'Carattere', default: 'Helvetica', options: FONT_OPTIONS },
       { key: 'fontSize', type: 'number', label: 'Dimensione', default: 11, min: 5, max: 72 },
       { key: 'color', type: 'color', label: 'Colore', default: '#333333' },
     ],
@@ -862,7 +861,7 @@ const EDIT = [
       for (let fi = 0; fi < files.length; fi++) {
         progress(fi / files.length, files[fi].name);
         const doc = await loadPdfLib(files[fi].bytes);
-        const font = await doc.embedFont(StandardFonts[FONT_STD[opts.font][0]]);
+        const font = await embedFont(doc, opts.font);
         const pages = doc.getPages();
         const first = opts.skipFirst ? 2 : 1;
         const total = pages.length - (opts.skipFirst ? 1 : 0) + (+opts.start || 1) - 1;
@@ -871,7 +870,7 @@ const EDIT = [
           const page = pages[i - 1];
           const fr = pageFrame(page);
           const num = i - first + (+opts.start || 1);
-          const text = toWinAnsi(fmt.replace(/\{n\}/g, num).replace(/\{t\}/g, total));
+          const text = textFor(font, fmt.replace(/\{n\}/g, num).replace(/\{t\}/g, total));
           const size = +opts.fontSize || 11;
           const w = font.widthOfTextAtSize(text, size);
           let pos = opts.pos;

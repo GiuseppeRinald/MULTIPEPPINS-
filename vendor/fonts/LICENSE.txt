@@ -1,0 +1,12 @@
+Caratteri inclusi (sottoinsiemi latini, usati per l'anteprima e incorporati nei PDF):
+
+- arial-*            Liberation Sans  (equivalente metrico di Arial)            SIL Open Font License 1.1
+- times-new-roman-*  Liberation Serif (equivalente metrico di Times New Roman)  SIL Open Font License 1.1
+- courier-new-*      Liberation Mono  (equivalente metrico di Courier New)      SIL Open Font License 1.1
+- calibri-*          Carlito          (equivalente metrico di Calibri)          SIL Open Font License 1.1
+- cambria-*          Caladea          (equivalente metrico di Cambria)          SIL Open Font License 1.1
+- dejavu-sans-*, dejavu-serif-*  DejaVu fonts                                    Bitstream Vera / DejaVu license (libera)
+- poppins-*          Poppins (Indian Type Foundry)                               SIL Open Font License 1.1
+
+Arial, Times New Roman, Courier New, Calibri e Cambria sono marchi dei rispettivi proprietari:
+qui indicano solo il carattere equivalente con le stesse misure.
