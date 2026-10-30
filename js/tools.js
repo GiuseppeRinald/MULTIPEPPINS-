@@ -6,6 +6,7 @@ import { createEditor } from './editor.js';
 import { el, icon, toast } from './ui.js';
 import { pdfOut, outName, pagesOption, pickPages, inflate, unpredict, fmtPct, ascii85 } from './helpers.js';
 import { CONVERT_TOOLS, EDIT_TOOLS, OTHER_TOOLS } from './tools2.js';
+import { PHASE2_TOOLS } from './tools3.js';
 
 const { PDFDocument, PDFName, PDFRawStream, PDFNumber, PDFArray, PDFDict, degrees, PDFBool } = PDFLib;
 
@@ -502,5 +503,5 @@ const SECURITY = [
   },
 ];
 
-export const TOOLS = [...ORGANIZE, ...OPTIMIZE, ...CONVERT_TOOLS, ...EDIT_TOOLS, ...SECURITY, ...OTHER_TOOLS];
+export const TOOLS = [...ORGANIZE, ...OPTIMIZE, ...CONVERT_TOOLS, ...PHASE2_TOOLS, ...EDIT_TOOLS, ...SECURITY, ...OTHER_TOOLS];
 export { rasterizePdf, toGray };

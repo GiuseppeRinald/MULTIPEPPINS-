@@ -2,9 +2,9 @@
 import { PDFLib, loadPdfLib, savePdf, renderPage, canvasToBytes, parseRanges, toWinAnsi, hexToRgb, readBytes, baseName, makeZip, loadScript, safeScale, imagesToPdf, LIB_URLS } from './core.js';
 import { createEditor, prepareImage } from './editor.js';
 import { htmlToPdf, PAGE_SIZES } from './layout.js';
-import { runOcr, OCR_LANGS } from './ocr.js';
+import { runOcr, OCR_LANGS, lazyOcr, ocrPdfPage } from './ocr.js';
 import { el, icon, toast } from './ui.js';
-import { pdfOut, outName, pagesOption, pickPages, pageFrame, drawPageFit, decodeToCanvas, pageLines, linesToParagraphs, escapeXml } from './helpers.js';
+import { pdfOut, outName, pagesOption, pickPages, pageFrame, drawPageFit, decodeToCanvas, pageLines, groupLines, linesToParagraphs, escapeXml } from './helpers.js';
 
 const { PDFDocument, StandardFonts, degrees, rgb, PDFName, PDFBool, PDFTextField, PDFCheckBox, PDFDropdown, PDFRadioGroup, PDFOptionList } = PDFLib;
 
@@ -372,9 +372,32 @@ function toNumber(v) {
   return null;
 }
 
+// Opzioni OCR comuni alle conversioni da PDF
+function ocrOptions(showIf = () => true) {
+  return [
+    { key: 'ocr', type: 'radio', label: 'Pagine scansionate (OCR)', default: 'auto', showIf, options: [
+      { value: 'auto', label: 'Automatico', desc: 'Riconosce il testo solo nelle pagine scansionate' },
+      { value: 'always', label: 'Sempre', desc: 'Usa l\'OCR su tutte le pagine (utile se il testo copiato esce strano)' },
+      { value: 'off', label: 'Mai', desc: 'Più veloce: le scansioni restano senza testo' },
+    ] },
+    { key: 'lang', type: 'select', label: 'Lingua del documento', default: 'ita', options: OCR_LANGS, showIf: (v) => showIf(v) && v.ocr !== 'off' },
+  ];
+}
+// Righe di testo di una pagina: testo vero del PDF oppure OCR se la pagina è una scansione
+async function linesFor(pdf, n, opts, ocr, progress) {
+  if (opts.ocr !== 'always') {
+    const r = await pageLines(pdf, n);
+    const len = r.lines.map((l) => l.text).join('').replace(/\s/g, '').length;
+    if (len >= 15 || opts.ocr === 'off') return { ...r, ocr: false };
+  }
+  progress && progress(`Pagina ${n}: riconoscimento del testo (OCR)…`);
+  const engine = await ocr.get();
+  const r = await ocrPdfPage(engine, pdf, n);
+  return { ...r, ocr: true };
+}
+
 // Righe → celle → colonne allineate
-async function pageTable(pdf, n) {
-  const { lines } = await pageLines(pdf, n);
+function pageTable(lines) {
   const rows = lines.map((l) => {
     const cells = [];
     let cur = null;
@@ -397,6 +420,74 @@ async function pageTable(pdf, n) {
     }
     return r;
   });
+}
+
+// Righe → blocchi Markdown (titoli in base alla dimensione del testo, elenchi puntati e numerati)
+function lineCells(l) {
+  let n = 0, lastEnd = null;
+  for (const it of l.items) { if (lastEnd == null || it.x - lastEnd > it.h * 0.9) n++; lastEnd = it.x + it.w; }
+  return n;
+}
+function linesToMarkdown(lines) {
+  if (!lines.length) return [];
+  const sizes = lines.map((l) => l.h).sort((a, b) => a - b);
+  const median = sizes[Math.floor(sizes.length / 2)] || 11;
+  // separa le tabelle (righe consecutive con più colonne) dal testo normale
+  const segs = [];
+  for (const l of lines) {
+    const tab = lineCells(l) >= 2;
+    const last = segs[segs.length - 1];
+    if (last && last.tab === tab) last.lines.push(l);
+    else segs.push({ tab, lines: [l] });
+  }
+  for (let i = 0; i < segs.length; i++) {
+    if (segs[i].tab && segs[i].lines.length < 2) segs[i].tab = false;
+  }
+  const out = [];
+  let buf = [];
+  const flush = () => { if (buf.length) out.push(...textToMarkdown(buf, median)); buf = []; };
+  for (const sg of segs) {
+    if (!sg.tab) { buf.push(...sg.lines); continue; }
+    flush();
+    const rows = trimRows(pageTable(sg.lines.map((l) => ({ ...l, items: [...l.items].sort((a, b) => a.x - b.x) }))));
+    if (!rows.length || rows[0].length < 2) { buf.push(...sg.lines); continue; }
+    const cell = (c) => mdEscape(String(c || '').trim()) || ' ';
+    out.push([`| ${rows[0].map(cell).join(' | ')} |`, `|${rows[0].map(() => ' --- ').join('|')}|`, ...rows.slice(1).map((r) => `| ${r.map(cell).join(' | ')} |`)].join('\n'));
+  }
+  flush();
+  return mergeLists(out);
+}
+function textToMarkdown(lines, median) {
+  const { paras } = linesToParagraphs(lines, median);
+  const out = [];
+  for (const p of paras) {
+    let t = p.text.replace(/\s+/g, ' ').trim();
+    if (!t) continue;
+    const ratio = p.size / median;
+    const bullet = t.match(/^[•·▪●◦○■□➢►\-–—*]\s*(.*)$/);
+    const num = t.match(/^(\d{1,3})[.)]\s+(.*)$/);
+    if (bullet && bullet[1]) { out.push('- ' + mdEscape(bullet[1])); continue; }
+    if (num) { out.push(`${num[1]}. ${mdEscape(num[2])}`); continue; }
+    t = mdEscape(t);
+    if (t.length < 140 && ratio >= 1.6) out.push('# ' + t);
+    else if (t.length < 140 && ratio >= 1.3) out.push('## ' + t);
+    else if (t.length < 140 && ratio >= 1.12) out.push('### ' + t);
+    else out.push(t);
+  }
+  return out;
+}
+// elenchi consecutivi senza riga vuota in mezzo
+function mergeLists(out) {
+  const merged = [];
+  for (const b of out) {
+    const isItem = /^(- |\d+\. )/.test(b);
+    if (isItem && merged.length && /^(- |\d+\. )/.test(merged[merged.length - 1].split('\n').pop())) merged[merged.length - 1] += '\n' + b;
+    else merged.push(b);
+  }
+  return merged;
+}
+function mdEscape(t) {
+  return t.replace(/([\\`*_[\]<>|])/g, '\\$1').replace(/^(#+|>|\+|=+)(\s)/, '\\$1$2');
 }
 
 const CONVERT_FROM = [
@@ -430,13 +521,16 @@ const CONVERT_FROM = [
     action: 'Converti in Word', working: 'Conversione in Word',
     options: [
       { key: 'mode', type: 'radio', default: 'auto', options: [
-        { value: 'auto', label: 'Testo modificabile', desc: 'Il testo diventa modificabile; le pagine scansionate restano come immagini' },
+        { value: 'auto', label: 'Testo modificabile', desc: 'Il testo diventa modificabile, anche nelle pagine scansionate (con l\'OCR)' },
         { value: 'image', label: 'Aspetto identico', desc: 'Ogni pagina come immagine: identica ma non modificabile' },
       ] },
+      ...ocrOptions((v) => v.mode === 'auto'),
     ],
     async run({ files, opts, progress }) {
       const f = files[0];
       progress(0.02, 'Caricamento del convertitore…');
+      const ocr = lazyOcr(opts.lang, (t) => progress(null, t));
+      try {
       const D = await loadScript(LIB_URLS.docx, 'docx');
       const first = await f.pdf.getPage(1);
       const vp = first.getViewport({ scale: 1, rotation: first.rotate });
@@ -444,14 +538,16 @@ const CONVERT_FROM = [
       const margin = 50;
       const contentPx = ((vp.width - margin * 2) * 96) / 72;
       const children = [];
+      let ocrPages = 0;
       for (let n = 1; n <= f.pages; n++) {
         progress((n - 1) / f.pages, `Pagina ${n} di ${f.pages}`);
         const brk = n > 1;
         let addImage = opts.mode === 'image';
         if (!addImage) {
-          const { lines } = await pageLines(f.pdf, n);
+          const { lines, ocr: viaOcr } = await linesFor(f.pdf, n, opts, ocr, (t) => progress((n - 1) / f.pages, t));
+          if (viaOcr) ocrPages++;
           const text = lines.map((l) => l.text).join('');
-          if (text.replace(/\s/g, '').length < 15) addImage = true;
+          if (text.replace(/\s/g, '').length < (viaOcr ? 3 : 15)) addImage = true;
           else {
             const { paras, median } = linesToParagraphs(lines);
             paras.forEach((p, pi) => {
@@ -476,7 +572,8 @@ const CONVERT_FROM = [
         sections: [{ properties: { page: { size: { width: tw(vp.width), height: tw(vp.height) }, margin: { top: tw(margin), bottom: tw(margin), left: tw(margin), right: tw(margin) } } }, children }],
       });
       const blob = await D.Packer.toBlob(doc);
-      return { outputs: [{ name: outName(f, '', 'docx'), data: blob, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }] };
+      return { outputs: [{ name: outName(f, '', 'docx'), data: blob, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' }], stats: ocrPages ? `${ocrPages} ${ocrPages === 1 ? 'pagina riconosciuta' : 'pagine riconosciute'} con l'OCR: controlla il testo, può contenere qualche errore.` : null };
+      } finally { ocr.end(); }
     },
   },
   {
@@ -523,22 +620,29 @@ const CONVERT_FROM = [
     action: 'Converti in Excel', working: 'Estrazione delle tabelle',
     options: [
       { key: 'layout', type: 'radio', default: 'perPage', options: [{ value: 'perPage', label: 'Un foglio per pagina' }, { value: 'single', label: 'Tutto in un foglio' }] },
-      { type: 'note', tone: 'info', text: 'Funziona con i PDF che contengono testo vero (non con le scansioni). Le colonne vengono ricostruite in base alla posizione del testo.' },
+      ...ocrOptions(),
+      { type: 'note', tone: 'info', text: 'Le colonne vengono ricostruite in base alla posizione del testo. Con le scansioni il testo viene riconosciuto con l\'OCR: controlla i numeri.' },
     ],
     async run({ files, opts, progress }) {
       const f = files[0];
       const sheets = [];
       let all = [];
+      let ocrPages = 0;
+      const ocr = lazyOcr(opts.lang, (t) => progress(null, t));
+      try {
       for (let n = 1; n <= f.pages; n++) {
         progress((n - 1) / f.pages, `Pagina ${n} di ${f.pages}`);
-        const rows = await pageTable(f.pdf, n);
+        const r = await linesFor(f.pdf, n, opts, ocr, (t) => progress((n - 1) / f.pages, t));
+        if (r.ocr) ocrPages++;
+        const rows = pageTable(r.ocr ? groupLines(r.items) : r.lines);
         if (opts.layout === 'single') { if (all.length && rows.length) all.push([]); all = all.concat(rows); }
         else sheets.push({ name: `Pagina ${n}`, rows });
       }
       if (opts.layout === 'single') sheets.push({ name: baseName(f.name).slice(0, 31) || 'Dati', rows: all });
-      if (!sheets.some((s) => s.rows.length)) throw new Error('Non ho trovato testo nel PDF: probabilmente è una scansione.');
+      if (!sheets.some((s) => s.rows.length)) throw new Error(opts.ocr === 'off' ? 'Non ho trovato testo nel PDF: probabilmente è una scansione. Attiva l\'OCR.' : 'Non ho trovato testo nel PDF, nemmeno con l\'OCR.');
       const blob = buildXlsx(sheets);
-      return { outputs: [{ name: outName(f, '', 'xlsx'), data: blob, mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }] };
+      return { outputs: [{ name: outName(f, '', 'xlsx'), data: blob, mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }], stats: ocrPages ? `${ocrPages} ${ocrPages === 1 ? 'pagina riconosciuta' : 'pagine riconosciute'} con l'OCR: controlla i dati.` : null };
+      } finally { ocr.end(); }
     },
   },
   {
@@ -562,6 +666,38 @@ const CONVERT_FROM = [
         outputs.push({ name: outName(f, '', 'txt'), data: new TextEncoder().encode(out), mime: 'text/plain' });
       }
       return { outputs, zipName: 'testi.zip', stats: empty ? 'Attenzione: in alcuni file non c\'è testo (probabilmente sono scansioni).' : null };
+    },
+  },
+  {
+    id: 'pdf-in-markdown', cat: 'da', icon: 'markdown', name: 'PDF in Markdown', isNew: true,
+    desc: 'Converti il PDF in Markdown (.md) con titoli ed elenchi, pronto per Notion, Obsidian o ChatGPT.',
+    keywords: 'md markdown notion obsidian testo titoli ai',
+    multiple: true, action: 'Converti in Markdown', working: 'Conversione in Markdown',
+    options: [
+      { key: 'sep', type: 'checkbox', label: 'Separa le pagine con una linea (---)', default: false },
+      ...ocrOptions(),
+    ],
+    async run({ files, opts, progress }) {
+      const outputs = [];
+      let ocrPages = 0;
+      const ocr = lazyOcr(opts.lang, (t) => progress(null, t));
+      try {
+        for (let fi = 0; fi < files.length; fi++) {
+          const f = files[fi];
+          const blocks = [];
+          for (let n = 1; n <= f.pages; n++) {
+            const frac = (fi + (n - 1) / f.pages) / files.length;
+            progress(frac, `${files.length > 1 ? f.name + ': ' : ''}pagina ${n} di ${f.pages}`);
+            const r = await linesFor(f.pdf, n, opts, ocr, (t) => progress(frac, t));
+            if (r.ocr) ocrPages++;
+            if (n > 1 && opts.sep) blocks.push('---');
+            blocks.push(...linesToMarkdown(r.lines));
+          }
+          const md = blocks.join('\n\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+          outputs.push({ name: outName(f, '', 'md'), data: new TextEncoder().encode(md), mime: 'text/markdown' });
+        }
+      } finally { ocr.end(); }
+      return { outputs, zipName: 'markdown.zip', stats: ocrPages ? `${ocrPages} ${ocrPages === 1 ? 'pagina riconosciuta' : 'pagine riconosciute'} con l'OCR` : null };
     },
   },
 ];
