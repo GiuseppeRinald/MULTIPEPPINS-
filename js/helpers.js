@@ -131,7 +131,12 @@ export async function pageLines(pdf, pageNum) {
     const h = Math.hypot(m[2], m[3]) || 10;
     items.push({ str: it.str, x: m[4], y: m[5], w: it.width * vp.scale, h, eol: it.hasEOL });
   }
-  items.sort((a, b) => a.y - b.y || a.x - b.x);
+  return { lines: groupLines(items), width: vp.width, height: vp.height };
+}
+
+// Raggruppa frammenti di testo {str,x,y(base),w,h} in righe ordinate dall'alto
+export function groupLines(items) {
+  items = [...items].sort((a, b) => a.y - b.y || a.x - b.x);
   const lines = [];
   for (const it of items) {
     const line = lines.find((l) => Math.abs(l.y - it.y) < Math.min(l.h, it.h) * 0.5);
@@ -154,24 +159,25 @@ export async function pageLines(pdf, pageNum) {
     l.text = text.replace(/\s+$/, '');
     l.x = l.items[0].x;
   }
-  return { lines, width: vp.width, height: vp.height };
+  return lines;
 }
 function mul(a, b) {
   return [a[0] * b[0] + a[2] * b[1], a[1] * b[0] + a[3] * b[1], a[0] * b[2] + a[2] * b[3], a[1] * b[2] + a[3] * b[3], a[0] * b[4] + a[2] * b[5] + a[4], a[1] * b[4] + a[3] * b[5] + a[5]];
 }
 
 // Raggruppa le righe in paragrafi
-export function linesToParagraphs(lines) {
+export function linesToParagraphs(lines, medianOverride) {
   const paras = [];
   let cur = null;
   const sizes = lines.map((l) => l.h).sort((a, b) => a - b);
-  const median = sizes[Math.floor(sizes.length / 2)] || 11;
+  const median = medianOverride || sizes[Math.floor(sizes.length / 2)] || 11;
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i];
     const prev = lines[i - 1];
     const gap = prev ? l.y - prev.y : 0;
     const big = l.h > median * 1.25;
-    const newPara = !cur || gap > Math.max(l.h, prev.h) * 1.6 || big !== cur.big || Math.abs(l.h - cur.size) > median * 0.25 || /^[•\-–·*]\s|^\d+[.)]\s/.test(l.text);
+    const ocr = l.par != null;
+    const newPara = !cur || gap < -1 || (ocr && l.par !== prev.par) || gap > Math.max(l.h, prev.h) * (ocr ? 2.4 : 1.6) || big !== cur.big || Math.abs(l.h - cur.size) > median * (ocr ? 0.4 : 0.25) || /^[•\-–·*]\s|^\d+[.)]\s/.test(l.text);
     if (newPara) {
       cur = { text: l.text, size: l.h, big, x: l.x };
       paras.push(cur);

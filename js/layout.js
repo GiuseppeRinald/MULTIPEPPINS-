@@ -3,6 +3,20 @@ import { PDFLib, toWinAnsi } from './core.js';
 
 const { PDFDocument, StandardFonts, rgb } = PDFLib;
 
+// Larghezza senza crenatura: pdf-lib la applica nella misura ma non nel disegno
+const cwCache = new WeakMap();
+function textWidth(font, text, size) {
+  let m = cwCache.get(font);
+  if (!m) { m = new Map(); cwCache.set(font, m); }
+  let w = 0;
+  for (const ch of text) {
+    let c = m.get(ch);
+    if (c == null) { c = font.widthOfTextAtSize(ch, 1000); m.set(ch, c); }
+    w += c;
+  }
+  return (w * size) / 1000;
+}
+
 export const PAGE_SIZES = {
   A4: [595.28, 841.89],
   A3: [841.89, 1190.55],
@@ -193,7 +207,7 @@ export async function htmlToPdf(root, options = {}) {
         sub.forEach((piece, pi) => {
           if (pi > 0) { if (!line.h) line.h = sz * 1.3; pushLine(); }
           if (!piece) return;
-          let w = font.widthOfTextAtSize(piece, sz);
+          let w = textWidth(font, piece, sz);
           const isSpace = /^\s+$/.test(piece);
           if (isSpace && !line.items.length) return;
           if (line.w + w > width && line.items.length && !isSpace) {
@@ -205,18 +219,18 @@ export async function htmlToPdf(root, options = {}) {
           // parola più lunga della riga: spezzala
           while (w > width && piece.length > 1) {
             let n = piece.length;
-            while (n > 1 && font.widthOfTextAtSize(piece.slice(0, n), sz) > width - line.w) n--;
+            while (n > 1 && textWidth(font, piece.slice(0, n), sz) > width - line.w) n--;
             if (n < 1) n = 1;
             const head = piece.slice(0, n);
-            line.items.push({ text: head, font, size: sz, run: r, w: font.widthOfTextAtSize(head, sz) });
+            line.items.push({ text: head, font, size: sz, run: r, w: textWidth(font, head, sz) });
             line.h = Math.max(line.h, sz * 1.3);
             pushLine();
             piece = piece.slice(n);
-            w = font.widthOfTextAtSize(piece, sz);
+            w = textWidth(font, piece, sz);
           }
           if (isSpace && !line.items.length) return;
-          line.items.push({ text: isSpace ? ' ' : piece, font, size: sz, run: r, w: isSpace ? font.widthOfTextAtSize(' ', sz) : w });
-          line.w += isSpace ? font.widthOfTextAtSize(' ', sz) : w;
+          line.items.push({ text: isSpace ? ' ' : piece, font, size: sz, run: r, w: isSpace ? textWidth(font, ' ', sz) : w });
+          line.w += isSpace ? textWidth(font, ' ', sz) : w;
           line.h = Math.max(line.h, sz * 1.3);
         });
       }

@@ -277,3 +277,13 @@ input[type=color] { width: 100%; height: 40px; border: 1px solid var(--line); bo
 .cat-btn.active { background: var(--brand); border-color: var(--brand); }
 .tool-head { background: linear-gradient(135deg, #ff7e5f 0%, #ff5a8a 50%, #a855f7 100%); color: #fff; border-radius: 0 0 28px 28px; padding-bottom: 26px; }
 .tool-head p { color: rgba(255, 255, 255, .92); }
+
+/* Workflow */
+.wf-step { border: 1px solid var(--line); border-radius: 12px; background: #fff; margin-bottom: 10px; overflow: hidden; }
+.wf-head { display: flex; align-items: center; gap: 8px; padding: 8px 10px; }
+.wf-head b { font-size: 14px; }
+.wf-head .spacer { flex: 1; }
+.wf-num { width: 24px; height: 24px; border-radius: 50%; background: var(--brand); color: #fff; font-size: 12px; font-weight: 800; display: grid; place-items: center; flex: none; }
+.wf-opts { padding: 4px 12px 10px; border-top: 1px dashed var(--line); }
+.wf-save { display: flex; gap: 8px; }
+.wf-save .inp { flex: 1; }

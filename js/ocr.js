@@ -115,6 +115,42 @@ function addTextLayer(page, font, words, pxToPt, frame) {
   page.pushOperators(setCharacterSqueeze(100), popGraphicsState());
 }
 
+// Motore OCR avviato solo se serve davvero (prima pagina scansionata)
+export function lazyOcr(lang, progress) {
+  let engine = null;
+  return {
+    get: async () => engine || (engine = await createOcr(lang || 'ita', progress)),
+    end: () => { if (engine) engine.end(); engine = null; },
+    get used() { return !!engine; },
+  };
+}
+
+// OCR di una pagina PDF: restituisce le righe nello stesso formato di pageLines (punti PDF, y dall'alto)
+export async function ocrPdfPage(engine, pdf, n) {
+  const pg = await pdf.getPage(n);
+  const vp = pg.getViewport({ scale: 1, rotation: pg.rotate });
+  const scale = Math.min(300 / 72, Math.sqrt(14e6 / (vp.width * vp.height)));
+  const { canvas } = await renderPage(pdf, n, scale);
+  const png = await canvasToBytes(canvas, 'image/png');
+  canvas.width = canvas.height = 1;
+  const res = await engine.recognize(png);
+  const words = parseTsv(res.tsv).filter((w) => w.conf >= 25 || /[\p{L}\p{N}]{2,}/u.test(w.text));
+  const lineH = {};
+  for (const w of words) lineH[w.line] = Math.max(lineH[w.line] || 0, w.h);
+  const items = words.map((w) => ({ str: w.text, x: w.x / scale, y: (w.y + w.h) / scale, w: w.w / scale, h: (lineH[w.line] / scale) * 0.95, line: w.line }));
+  // righe nell'ordine di lettura stabilito da Tesseract (gestisce bene le colonne)
+  const byLine = new Map();
+  for (const it of items) {
+    if (!byLine.has(it.line)) byLine.set(it.line, []);
+    byLine.get(it.line).push(it);
+  }
+  const lines = [...byLine.values()].map((its) => {
+    its.sort((a, b) => a.x - b.x);
+    return { par: its[0].line.split('-').slice(0, 2).join('-'), y: Math.max(...its.map((i) => i.y)), h: Math.max(...its.map((i) => i.h)), x: its[0].x, items: its, text: its.map((i) => i.str).join(' ') };
+  });
+  return { lines, items, text: res.text, width: vp.width, height: vp.height };
+}
+
 export async function runOcr({ files, opts, progress }) {
   const engine = await createOcr(opts.lang, (t) => progress(0.02, t));
   const outputs = [];
