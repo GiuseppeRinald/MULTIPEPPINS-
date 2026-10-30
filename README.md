@@ -3,12 +3,12 @@
 Tutti gli strumenti PDF in un posto solo, in stile iLovePDF, con il tema "Tramonto".
 Tutto funziona **nel browser**: i file non vengono mai caricati su un server.
 
-## Strumenti (34)
+## Strumenti (35)
 
 | Categoria | Strumenti |
 |---|---|
 | Organizza | Unisci PDF · Dividi PDF · Rimuovi pagine · Estrai pagine · Organizza PDF · Ruota PDF |
-| Ottimizza | Comprimi PDF · Ripara PDF · PDF in bianco e nero |
+| Ottimizza | Comprimi PDF · OCR PDF · Ripara PDF · PDF in bianco e nero |
 | Converti in PDF | Immagini in PDF · Scansiona in PDF · Word in PDF · Excel in PDF · Testo in PDF · HTML in PDF |
 | Converti da PDF | PDF in JPG/PNG · PDF in Word · PDF in PowerPoint · PDF in Excel · PDF in testo |
 | Modifica | Modifica PDF · Firma PDF · Filigrana · Numeri di pagina · Ritaglia PDF · Ridimensiona pagine · Più pagine per foglio · Compila moduli · Proprietà del PDF |
@@ -35,10 +35,11 @@ e aprire `http://localhost:8000`. Funziona anche su GitHub Pages, Netlify, Cloud
 - `js/pages.js` — miniature e riordino pagine
 - `js/layout.js` — impaginatore HTML → PDF
 - `js/crypto.js` — protezione/sblocco con password (AES/RC4)
-- `vendor/` — librerie: pdf-lib, pdf.js, docx, PptxGenJS
+- `js/ocr.js`, `js/ocr-worker.js` — OCR con Tesseract (italiano, inglese, francese, tedesco, spagnolo)
+- `vendor/` — librerie: pdf-lib, pdf.js, docx, PptxGenJS, Tesseract e dati delle lingue
 
 Word in PDF ed Excel in PDF scaricano al primo uso le librerie mammoth e SheetJS da CDN (serve internet).
 
 ## Prossima fase
 
-OCR (testo da scansioni), PowerPoint in PDF, PDF/A.
+PowerPoint in PDF, PDF/A.

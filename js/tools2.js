@@ -2,6 +2,7 @@
 import { PDFLib, loadPdfLib, savePdf, renderPage, canvasToBytes, parseRanges, toWinAnsi, hexToRgb, readBytes, baseName, makeZip, loadScript, safeScale, imagesToPdf, LIB_URLS } from './core.js';
 import { createEditor, prepareImage } from './editor.js';
 import { htmlToPdf, PAGE_SIZES } from './layout.js';
+import { runOcr, OCR_LANGS } from './ocr.js';
 import { el, icon, toast } from './ui.js';
 import { pdfOut, outName, pagesOption, pickPages, pageFrame, drawPageFit, decodeToCanvas, pageLines, linesToParagraphs, escapeXml } from './helpers.js';
 
@@ -1041,6 +1042,25 @@ async function docText(pdf) {
 }
 
 const OTHER = [
+  {
+    id: 'ocr-pdf', cat: 'ottimizza', icon: 'scan', name: 'OCR PDF', isNew: true,
+    desc: 'Riconosce il testo di PDF scansionati e foto: diventa ricercabile e copiabile.',
+    keywords: 'ocr riconoscimento testo scansione ricercabile copia estrai',
+    accept: 'application/pdf,.pdf,image/*,.jpg,.jpeg,.png,.webp', multiple: true, orderMatters: true,
+    pickLabel: 'Seleziona PDF o immagini', action: 'Avvia OCR', working: 'Riconoscimento del testo',
+    sideIntro: 'Funziona con PDF scansionati e foto di documenti. La prima volta il motore impiega qualche secondo ad avviarsi.',
+    options: [
+      { key: 'lang', type: 'select', label: 'Lingua del documento', default: 'ita', options: OCR_LANGS },
+      { key: 'output', type: 'radio', label: 'Cosa vuoi ottenere?', default: 'pdf', options: [
+        { value: 'pdf', label: 'PDF ricercabile', desc: 'Aspetto identico, ma puoi cercare e copiare il testo' },
+        { value: 'txt', label: 'Solo il testo (.txt)', desc: 'Il testo riconosciuto in un file di testo' },
+        { value: 'both', label: 'Entrambi', desc: 'PDF ricercabile + file di testo' },
+      ] },
+      { key: 'skipText', type: 'checkbox', label: 'Salta le pagine che hanno già del testo', default: true },
+    ],
+    validate: (o, files) => (files.some((f) => f.isPdf) && files.some((f) => !f.isPdf) ? 'Usa solo PDF oppure solo immagini, non insieme.' : null),
+    run: (ctx) => runOcr(ctx),
+  },
   {
     id: 'confronta-pdf', cat: 'altro', icon: 'compare', name: 'Confronta PDF', isNew: true,
     desc: 'Trova le differenze tra due versioni di un documento, nel testo o nell\'aspetto.',
