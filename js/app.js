@@ -35,12 +35,38 @@ function topbar(withSearch) {
     el('button', { class: 'logo', onclick: goHome, 'aria-label': 'Home' }, el('span', { class: 'logo-mark' }, 'M'), el('span', {}, 'MULTI', el('b', {}, 'PEPPINS'))),
     el('div', { class: 'spacer' }),
   );
+  if (installAvailable()) bar.append(el('button', { class: 'btn-install', onclick: installApp }, icon('download', 16), 'Installa app'));
   if (withSearch) {
     const inp = el('input', { placeholder: 'Cerca uno strumento…', value: state.query });
     inp.addEventListener('input', () => { state.query = inp.value; renderGrid(); });
     bar.append(el('div', { class: 'top-search' }, icon('search', 16), inp));
   }
   return bar;
+}
+
+/* ================= Installazione come app ================= */
+let deferredPrompt = null;
+const framed = (() => { try { return window.top !== window; } catch { return true; } })();
+const standalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function installAvailable() { return !framed && !standalone() && (deferredPrompt || isIOS); }
+if (!framed && 'serviceWorker' in navigator && location.protocol === 'https:') navigator.serviceWorker.register('sw.js').catch(() => {});
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const bar = document.querySelector('.topbar');
+  if (bar && !bar.querySelector('.btn-install')) bar.insertBefore(el('button', { class: 'btn-install', onclick: installApp }, icon('download', 16), 'Installa app'), bar.querySelector('.top-search'));
+});
+window.addEventListener('appinstalled', () => { document.querySelectorAll('.btn-install').forEach((b) => b.remove()); toast('MULTIPEPPINS è installata!'); });
+async function installApp() {
+  if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice.catch(() => {}); deferredPrompt = null; return; }
+  modal({
+    title: 'Installa MULTIPEPPINS',
+    body: el('div', {}, isIOS
+      ? el('ol', { style: { paddingLeft: '20px', lineHeight: '1.7' } }, el('li', {}, 'Tocca il pulsante Condividi di Safari (il quadrato con la freccia in su)'), el('li', {}, 'Scegli "Aggiungi alla schermata Home"'), el('li', {}, 'Tocca "Aggiungi"'))
+      : el('div', {}, el('p', {}, 'Android (Chrome): menu ⋮ → "Installa app".'), el('p', {}, 'PC (Chrome o Edge): icona di installazione a destra nella barra degli indirizzi.'))),
+    buttons: [{ label: 'Ho capito', primary: true, onClick: (close) => close() }],
+  });
 }
 
 /* ================= Home ================= */
@@ -277,6 +303,16 @@ function renderFileCards(ctx) {
   const tool = state.tool;
   const wrap = el('div', { class: 'files' });
   const many = state.files.length > 1 && tool.multiple;
+  if (tool.rotateFiles) {
+    const rotAll = (d) => { state.files.forEach((f) => (f.rot = d === 0 ? 0 : (((f.rot || 0) + d) % 360 + 360) % 360)); renderWorkspace(); };
+    ctx.stage.append(el('div', { class: 'pages-toolbar', style: { width: '100%' } },
+      el('span', { style: { fontSize: '13px', color: 'var(--ink-3)', fontWeight: 600 } }, 'Ruota tutti:'),
+      el('button', { class: 'chip', onclick: () => rotAll(-90) }, icon('rotl', 14), '90° sinistra'),
+      el('button', { class: 'chip', onclick: () => rotAll(90) }, icon('rotr', 14), '90° destra'),
+      el('button', { class: 'chip', onclick: () => rotAll(180) }, '180°'),
+      el('button', { class: 'chip', onclick: () => rotAll(0) }, 'Azzera'),
+    ));
+  }
   if (tool.orderMatters && many) {
     const sortBar = el('div', { class: 'pages-toolbar', style: { width: '100%' } },
       el('span', { style: { fontSize: '13px', color: 'var(--ink-3)', fontWeight: 600 } }, 'Ordine:'),
@@ -294,6 +330,15 @@ function renderFileCards(ctx) {
       el('div', { class: 'fmeta' }, fmtSize(f.size) + (f.pages ? ` · ${f.pages} ${f.pages === 1 ? 'pagina' : 'pagine'}` : '') + (f.locked ? ' · protetto' : '')),
       el('div', { class: 'fbtns' }, el('button', { class: 'mini', title: 'Rimuovi', onclick: () => ctx.removeFile(f.id) }, icon('close'))),
     );
+    if (tool.rotateFiles) {
+      const turn = (d) => { f.rot = (((f.rot || 0) + d) % 360 + 360) % 360; renderWorkspace(); };
+      card.append(el('div', { class: 'rotbar' },
+        el('button', { class: 'mini', title: 'Ruota di 90° a sinistra', onclick: () => turn(-90) }, icon('rotl')),
+        el('button', { class: 'mini', title: 'Ruota di 90° a destra', onclick: () => turn(90) }, icon('rotr')),
+        el('button', { class: 'mini', title: 'Ruota di 180°', style: { fontSize: '11px', fontWeight: 800, width: 'auto', padding: '0 8px' }, onclick: () => turn(180) }, '180°'),
+      ));
+      if (f.rot) card.append(el('div', { class: 'rot-badge' }, `Ruotato di ${f.rot}°`));
+    }
     if (tool.orderMatters && many) {
       card.append(el('div', { class: 'order' }, String(idx + 1)));
       card.append(el('div', { class: 'movebar' },
@@ -332,8 +377,9 @@ function moveFile(idx, d) {
 }
 
 async function makeThumb(f, holder) {
+  const rotStyle = () => { const r = f.rot || 0; return r ? { transform: `rotate(${r}deg)${r % 180 ? ' scale(.72)' : ''}` } : null; };
   try {
-    if (f.thumbUrl) { holder.append(el('img', { src: f.thumbUrl, alt: '' })); return; }
+    if (f.thumbUrl) { holder.append(el('img', { src: f.thumbUrl, alt: '', style: rotStyle() })); return; }
     if (f.isPdf && f.pdf) {
       const first = await f.pdf.getPage(1);
       const vp = first.getViewport({ scale: 1 });
@@ -345,7 +391,7 @@ async function makeThumb(f, holder) {
       holder.append(el('div', { style: { color: 'var(--ink-3)', textAlign: 'center', fontWeight: 800 } }, icon('page', 46), el('div', {}, (f.name.split('.').pop() || '').toUpperCase())));
       return;
     }
-    holder.append(el('img', { src: f.thumbUrl, alt: '' }));
+    holder.append(el('img', { src: f.thumbUrl, alt: '', style: rotStyle() }));
   } catch {
     holder.append(icon(f.locked ? 'lock' : 'page', 40));
   }

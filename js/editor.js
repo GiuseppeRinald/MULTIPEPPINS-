@@ -2,6 +2,7 @@
 import { PDFLib, renderPage, toWinAnsi, hexToRgb, loadPdfLib, savePdf, canvasToBytes, readBytes } from './core.js';
 import { el, icon, toast, modal } from './ui.js';
 import { FONTS, fontCss, fontReady, embedFont, textFor, isEmbeddedFont } from './fonts.js';
+import { stampsDialog, rememberStampSize } from './stamps.js';
 
 const { degrees, StandardFonts, rgb } = PDFLib;
 let SIGNATURES = []; // firme create in questa sessione: [{url, bytes}]
@@ -51,7 +52,8 @@ export function createEditor(ctx, { mode = 'edit' } = {}) {
     addTool('initials', 'Iniziali', 'sign', () => signatureDialog((sig) => { pending = { kind: 'image', ...sig, isSig: true, small: true }; setTool('place'); toast('Tocca la pagina dove vuoi le iniziali'); }, true));
     addTool('date', 'Data', 'calendar', () => { pending = { kind: 'text', text: new Date().toLocaleDateString('it-IT') }; setTool('place'); toast('Tocca dove inserire la data'); });
     addTool('text', 'Testo', 'text');
-    addTool('image', 'Timbro/immagine', 'image', () => imgInput.click());
+    addTool('stamps', 'Timbri', 'stamp', () => stampsDialog((st) => { pending = { kind: 'image', ...st }; setTool('place'); toast('Tocca la pagina dove vuoi il timbro'); }));
+    addTool('image', 'Immagine', 'image', () => imgInput.click());
   } else {
     addTool('select', 'Seleziona', 'cursor');
     addTool('redact', 'Area da oscurare', 'redact');
@@ -61,7 +63,7 @@ export function createEditor(ctx, { mode = 'edit' } = {}) {
 
   function setTool(t) {
     tool = t;
-    Object.entries(toolBtns).forEach(([k, b]) => b.classList.toggle('on', k === t || (t === 'place' && pending && ((pending.isSig && k === 'signature') || (!pending.isSig && pending.kind === 'image' && k === 'image')))));
+    Object.entries(toolBtns).forEach(([k, b]) => b.classList.toggle('on', k === t || (t === 'place' && pending && ((pending.isSig && k === 'signature') || (pending.stampId && k === 'stamps') || (!pending.isSig && !pending.stampId && pending.kind === 'image' && k === 'image')))));
     pages.forEach((p) => { p.node.className = 'ed-page mode-' + (t === 'whiteout' ? 'rect' : t); });
     if (t !== 'select') select(null);
     renderProps();
@@ -195,10 +197,10 @@ export function createEditor(ctx, { mode = 'edit' } = {}) {
           const it = addItem(p, { type: 'text', x: pt.x, y: pt.y, text: pending.text, size: defaults.textSize, color: defaults.textColor, font: defaults.font, bold: false, italic: false });
           pending = null; setTool('select'); select(it); return;
         }
-        const wPt = Math.min(p.vp1.width * 0.6, pending.small ? 70 : pending.isSig ? 170 : 200);
+        const wPt = Math.min(p.vp1.width * (pending.wPt ? 0.95 : 0.6), pending.wPt || (pending.small ? 70 : pending.isSig ? 170 : pending.stampId ? 160 : 200));
         const wF = wPt / p.vp1.width;
         const hF = (wPt * (pending.h / pending.w)) / p.vp1.height;
-        const it = addItem(p, { type: 'image', x: Math.max(0, pt.x - wF / 2), y: Math.max(0, pt.y - hF / 2), w: wF, h: hF, url: pending.url, bytes: pending.bytes, mime: pending.mime, ratio: pending.h / pending.w });
+        const it = addItem(p, { type: 'image', x: Math.max(0, pt.x - wF / 2), y: Math.max(0, pt.y - hF / 2), w: wF, h: hF, url: pending.url, bytes: pending.bytes, mime: pending.mime, ratio: pending.h / pending.w, stampId: pending.stampId });
         pending = null; setTool('select'); select(it); return;
       }
       if (['rect', 'whiteout', 'hl', 'redact'].includes(tool)) {
@@ -326,6 +328,7 @@ export function createEditor(ctx, { mode = 'edit' } = {}) {
         node.removeEventListener('pointerup', up);
         node.removeEventListener('pointercancel', up);
         if (!moved && it.type === 'text' && it.wasSelected) startEditing(it, false);
+        if (moved && resizing && it.stampId) rememberStampSize(it.stampId, it.w * p.vp1.width);
         it.wasSelected = true;
       };
       node.addEventListener('pointermove', mv);

@@ -72,6 +72,7 @@ const P = {
   square: '<rect x="4" y="4" width="16" height="16" rx="1"/>',
   hl: '<path d="M9 11l-6 6v4h4l6-6M14 6l4 4M12 8l4 4-6 6-4-4z"/>',
   cursor: '<path d="M5 3l14 8-6 2-2 6z"/>',
+  stamp: '<path d="M9 3h6v5l-1 3h4a2 2 0 0 1 2 2v3H4v-3a2 2 0 0 1 2-2h4L9 8z"/><path d="M4 20h16"/>',
   calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
 };
 export function icon(name, size) {

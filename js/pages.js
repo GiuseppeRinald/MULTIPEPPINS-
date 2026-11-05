@@ -131,13 +131,15 @@ export function arrangeGrid(ctx, { allowBlank = true } = {}) {
       const th = el('div', { class: 'pthumb' });
       const inner = it.blank ? el('div', { class: 'blank' }) : el('div', { class: 'blank' });
       th.append(inner);
-      const setRot = (node) => { node.style.transform = `rotate(${it.rot}deg)`; };
+      const setRot = (node) => { if (node) node.style.transform = `rotate(${it.rot}deg)${it.rot % 180 ? ' scale(.72)' : ''}`; };
       const card = el('div', { class: 'pcard', draggable: 'true' }, th,
         ctx.files.length > 1 && !it.blank ? el('span', { class: 'src-tag' }, LETTERS[it.src] || '?') : null,
         el('div', { class: 'pnum' }, it.blank ? 'Vuota' : (ctx.files.length > 1 ? `${LETTERS[it.src]}${it.page}` : String(it.page))),
         el('div', { class: 'pbtns' },
           el('button', { class: 'mini', title: 'Sposta a sinistra', onclick: (e) => { e.stopPropagation(); move(idx, -1); } }, icon('left')),
-          el('button', { class: 'mini', title: 'Ruota', onclick: (e) => { e.stopPropagation(); it.rot = (it.rot + 90) % 360; setRot(th.firstChild); } }, icon('rotr')),
+          el('button', { class: 'mini', title: 'Ruota di 90° a sinistra', onclick: (e) => { e.stopPropagation(); it.rot = (it.rot + 270) % 360; setRot(th.firstChild); } }, icon('rotl')),
+          el('button', { class: 'mini', title: 'Ruota di 90° a destra', onclick: (e) => { e.stopPropagation(); it.rot = (it.rot + 90) % 360; setRot(th.firstChild); } }, icon('rotr')),
+          allowBlank ? el('button', { class: 'mini', title: 'Inserisci una pagina vuota dopo questa', onclick: (e) => { e.stopPropagation(); items.splice(idx + 1, 0, { key: ++key, blank: true, rot: 0 }); draw(); } }, icon('plus')) : null,
           el('button', { class: 'mini', title: 'Elimina', onclick: (e) => { e.stopPropagation(); items.splice(idx, 1); draw(); } }, icon('trash')),
           el('button', { class: 'mini', title: 'Sposta a destra', onclick: (e) => { e.stopPropagation(); move(idx, 1); } }, icon('right')),
         ),
@@ -172,6 +174,20 @@ export function arrangeGrid(ctx, { allowBlank = true } = {}) {
     });
     info.textContent = `${items.length} pagine`;
   };
+  const sortItems = (how) => {
+    const real = items.filter((x) => !x.blank), blanks = items.filter((x) => x.blank);
+    const byNum = (a, b) => a.src - b.src || a.page - b.page;
+    if (how === 'az') real.sort((a, b) => ctx.files[a.src].name.localeCompare(ctx.files[b.src].name, 'it', { numeric: true }) || a.page - b.page);
+    else if (how === 'num') real.sort((a, b) => a.page - b.page || a.src - b.src);
+    else {
+      const groups = [];
+      real.sort(byNum).forEach((x) => (groups[x.src] ||= []).push(x));
+      const out = [];
+      for (let k = 0; groups.some((g) => g && k < g.length); k++) groups.forEach((g) => g && g[k] && out.push(g[k]));
+      real.splice(0, real.length, ...out);
+    }
+    items = [...real, ...blanks];
+  };
   const move = (idx, d) => {
     const j = idx + d;
     if (j < 0 || j >= items.length) return;
@@ -181,12 +197,16 @@ export function arrangeGrid(ctx, { allowBlank = true } = {}) {
   const bar = el('div', { class: 'pages-toolbar' },
     allowBlank ? el('button', { class: 'chip', onclick: () => { items.push({ key: ++key, blank: true, rot: 0 }); draw(); } }, icon('plus', 14), 'Pagina vuota') : null,
     el('button', { class: 'chip', onclick: () => { items.reverse(); draw(); } }, 'Inverti ordine'),
-    el('button', { class: 'chip', onclick: () => { items.forEach((x) => (x.rot = (x.rot + 90) % 360)); draw(); } }, icon('rotr', 14), 'Ruota tutte'),
+    el('button', { class: 'chip', title: 'Ordina per nome del file', onclick: () => { sortItems('az'); draw(); } }, 'A → Z'),
+    el('button', { class: 'chip', title: 'Ordina per numero di pagina', onclick: () => { sortItems('num'); draw(); } }, '1 → 9'),
+    ctx.files.length > 1 ? el('button', { class: 'chip', title: 'Pagina 1 di ogni file, poi pagina 2, e così via', onclick: () => { sortItems('mix'); draw(); } }, 'Mischia pagine') : null,
+    el('button', { class: 'chip', onclick: () => { items.forEach((x) => (x.rot = (x.rot + 270) % 360)); draw(); } }, icon('rotl', 14), 'Tutte a sinistra'),
+    el('button', { class: 'chip', onclick: () => { items.forEach((x) => (x.rot = (x.rot + 90) % 360)); draw(); } }, icon('rotr', 14), 'Tutte a destra'),
     el('button', { class: 'chip', onclick: () => { build(); draw(); } }, 'Ripristina'),
     el('button', { class: 'chip', onclick: ctx.addMore }, icon('plus', 14), 'Aggiungi PDF'),
     info,
   );
-  ctx.stage.append(el('div', { class: 'note info', style: { marginTop: 0 } }, 'Trascina le pagine (o usa le frecce) per riordinarle. Puoi ruotarle, eliminarle e aggiungere pagine vuote.'), bar, grid);
+  ctx.stage.append(el('div', { class: 'note info', style: { marginTop: 0 } }, 'Trascina le pagine (o usa le frecce) per riordinarle. Puoi ruotarle a sinistra o a destra, eliminarle e inserire pagine vuote dopo una pagina con +.'), bar, grid);
   draw();
   return {
     getItems: () => items.map((x) => ({ ...x })),

@@ -15,7 +15,21 @@ Tutto funziona **nel browser**: i file non vengono mai caricati su un server.
 | Sicurezza | Proteggi PDF · Sblocca PDF · Censura PDF · Appiattisci PDF |
 | Altro | Confronta PDF · Workflow (più strumenti in sequenza, salvabili) |
 
-## Come avviarla
+## Usala e installala come app
+
+Apri **https://giusepperinald.github.io/MULTIPEPPINS-/** e premi **Installa app** in alto
+(su iPhone: Condividi → "Aggiungi alla schermata Home"). Dopo il primo avvio funziona anche senza internet.
+
+## Novità
+
+- **Unisci PDF**: ruota ogni file di 90° a sinistra, 90° a destra o 180° prima di unirlo (o tutti insieme)
+- **Firma PDF → Timbri**: archivio di timbri aziendali con nome, ricerca, rinomina, esportazione/importazione per i colleghi; ricorda la dimensione di ogni timbro
+- **Organizza PDF**: ruota a sinistra/destra, pagina vuota dopo una pagina qualsiasi, ordina A→Z o 1→9, mischia le pagine di più file
+- **Dividi PDF**: nuove modalità "Estrai pagine" e "Per dimensione" (peso massimo per file)
+- **Filigrana**: sopra o sotto il contenuto, inclinazione anche 180° e 270°
+- **Immagini in PDF / Scansiona**: ruota ogni foto prima della conversione
+
+## Come avviarla in locale
 
 È un sito statico: basta servire la cartella con un qualsiasi web server, per esempio
 
@@ -35,6 +49,8 @@ e aprire `http://localhost:8000`. Funziona anche su GitHub Pages, Netlify, Cloud
 - `js/fonts.js` — caratteri: i 3 standard del PDF più Arial, Times New Roman, Courier New, Calibri, Cambria (equivalenti liberi), DejaVu e Poppins, incorporati nei PDF con accenti ed €
 - `js/pptx.js` — lettore PowerPoint (forme, testi, immagini, tabelle) → PDF
 - `js/editor.js` — editor visuale (modifica, firma, censura)
+- `js/stamps.js` — archivio dei timbri aziendali (IndexedDB, esporta/importa)
+- `manifest.webmanifest`, `sw.js`, `icons/` — installazione come app e uso offline
 - `js/pages.js` — miniature e riordino pagine
 - `js/layout.js` — impaginatore HTML → PDF
 - `js/crypto.js` — protezione/sblocco con password (AES/RC4)

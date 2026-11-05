@@ -81,6 +81,19 @@ function scanFilter(canvas, mode) {
   return canvas;
 }
 
+function rotateCanvas(src, deg) {
+  const r = ((deg % 360) + 360) % 360;
+  if (!r) return src;
+  const c = document.createElement('canvas');
+  c.width = r % 180 ? src.height : src.width;
+  c.height = r % 180 ? src.width : src.height;
+  const g = c.getContext('2d');
+  g.translate(c.width / 2, c.height / 2);
+  g.rotate((r * Math.PI) / 180);
+  g.drawImage(src, -src.width / 2, -src.height / 2);
+  src.width = src.height = 1;
+  return c;
+}
 async function imagesToPdfTool(files, opts, progress, filterMode) {
   const pagesIn = [];
   for (let i = 0; i < files.length; i++) {
@@ -91,6 +104,7 @@ async function imagesToPdfTool(files, opts, progress, filterMode) {
     } catch {
       throw new Error(`"${files[i].name}" non è un'immagine leggibile da questo browser (i file HEIC dell'iPhone vanno prima convertiti in JPG).`);
     }
+    if (files[i].rot) canvas = rotateCanvas(canvas, files[i].rot);
     if (filterMode) scanFilter(canvas, filterMode);
     const isPng = /png|gif|webp|bmp/i.test(files[i].type) && !filterMode;
     const bytes = await canvasToBytes(canvas, isPng ? 'image/png' : 'image/jpeg', filterMode === 'doc' ? 0.8 : 0.9);
@@ -155,7 +169,7 @@ const CONVERT_IN = [
     id: 'immagini-in-pdf', cat: 'in', icon: 'jpg', name: 'Immagini in PDF',
     desc: 'Trasforma foto JPG, PNG e altre immagini in un PDF.',
     keywords: 'jpg png foto immagine converti',
-    accept: 'image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp', multiple: true, orderMatters: true,
+    accept: 'image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp', multiple: true, orderMatters: true, rotateFiles: true,
     pickLabel: 'Seleziona le immagini', action: 'Converti in PDF', working: 'Creazione del PDF',
     options: [...pageLayoutOpts(true), { key: 'merge', type: 'checkbox', label: 'Unisci tutte le immagini in un solo PDF', default: true }],
     run: ({ files, opts, progress }) => imagesToPdfTool(files, opts, progress, null),
@@ -164,7 +178,7 @@ const CONVERT_IN = [
     id: 'scansiona-in-pdf', cat: 'in', icon: 'scan', name: 'Scansiona in PDF', isNew: true,
     desc: 'Fotografa i documenti col telefono: sfondo bianco e testo nitido, come uno scanner.',
     keywords: 'scanner fotocamera foto documento camera',
-    accept: 'image/*,.jpg,.jpeg,.png,.webp', multiple: true, orderMatters: true, capture: true,
+    accept: 'image/*,.jpg,.jpeg,.png,.webp', multiple: true, orderMatters: true, rotateFiles: true, capture: true,
     pickLabel: 'Scegli le foto', action: 'Crea il PDF', working: 'Pulizia delle scansioni',
     options: [
       { key: 'filter', type: 'radio', label: 'Effetto', default: 'doc', options: [
@@ -750,6 +764,15 @@ function imagePickField(key) {
   };
 }
 
+// Sposta l'ultimo flusso di contenuto (quello appena disegnato) sotto il contenuto originale
+function sendToBack(page) {
+  const c = page.node.Contents();
+  if (!(c instanceof PDFLib.PDFArray) || c.size() < 2) return;
+  const last = c.get(c.size() - 1);
+  c.remove(c.size() - 1);
+  c.insert(0, last);
+}
+
 const EDIT = [
   {
     id: 'modifica-pdf', cat: 'modifica', icon: 'edit', name: 'Modifica PDF',
@@ -768,7 +791,7 @@ const EDIT = [
     keywords: 'firma sign autografa iniziali',
     action: 'Firma il PDF', working: 'Inserimento della firma',
     stage: (ctx) => createEditor(ctx, { mode: 'sign' }),
-    sideIntro: 'Tocca "Firma" in alto per crearla, poi tocca il punto del documento dove inserirla. Puoi spostarla e ridimensionarla.',
+    sideIntro: 'Tocca "Firma" in alto per crearla, poi tocca il punto del documento dove inserirla. Con "Timbri" scegli un timbro aziendale dall\'archivio salvato sul dispositivo. Puoi spostare e ridimensionare tutto.',
     options: [{ key: 'allPages', type: 'checkbox', label: 'Ripeti firme e testi nella stessa posizione su tutte le pagine', default: false }],
     async run({ files, opts, stageCtl }) {
       return { outputs: [pdfOut(outName(files[0], 'firmato'), await stageCtl.apply(files[0].bytes, { allPages: opts.allPages }))] };
@@ -789,7 +812,8 @@ const EDIT = [
       { key: 'image', type: 'custom', label: 'Immagine', render: imagePickField('image'), showIf: (v) => v.kind === 'image' },
       { key: 'imgScale', type: 'range', label: 'Grandezza immagine', default: 40, min: 5, max: 100, format: (v) => v + '% della pagina', showIf: (v) => v.kind === 'image' },
       { key: 'opacity', type: 'range', label: 'Trasparenza', default: 30, min: 5, max: 100, format: (v) => `Opacità ${v}%` },
-      { key: 'rotation', type: 'seg', label: 'Inclinazione', default: 45, options: [{ value: 0, label: '0°' }, { value: 45, label: '45°' }, { value: -45, label: '−45°' }, { value: 90, label: '90°' }] },
+      { key: 'rotation', type: 'seg', label: 'Inclinazione', default: 45, options: [{ value: 0, label: '0°' }, { value: 45, label: '45°' }, { value: -45, label: '−45°' }, { value: 90, label: '90°' }, { value: 180, label: '180°' }, { value: 270, label: '270°' }] },
+      { key: 'layer', type: 'seg', label: 'Livello', default: 'over', options: [{ value: 'over', label: 'Sopra il contenuto' }, { value: 'under', label: 'Sotto il contenuto' }], help: 'Sotto il contenuto la filigrana non copre il testo; nelle scansioni (pagine-immagine) però non si vede.' },
       { key: 'mosaic', type: 'checkbox', label: 'Ripeti a mosaico su tutta la pagina', default: false },
       { key: 'pos', type: 'position', label: 'Posizione', default: 'mc', showIf: (v) => !v.mosaic },
       ...pagesOption('Pagine'),
@@ -813,7 +837,7 @@ const EDIT = [
           else {
             w = font.widthOfTextAtSize(text, size);
             // non uscire dalla pagina
-            const maxW = (Math.abs(opts.rotation) === 45 ? Math.min(fr.w, fr.h) * 1.25 : opts.rotation === 90 ? fr.h : fr.w) * 0.92;
+            const maxW = (Math.abs(opts.rotation) === 45 ? Math.min(fr.w, fr.h) * 1.25 : opts.rotation % 180 ? fr.h : fr.w) * 0.92;
             if (w > maxW && !opts.mosaic) { size *= maxW / w; w = maxW; }
             h = size * 0.7;
           }
@@ -822,7 +846,7 @@ const EDIT = [
             const stepX = Math.max(w * 0.9, 120) + 60, stepY = Math.max(img ? h : size * 2.2, 80) + 50;
             for (let y = stepY / 2, r = 0; y < fr.h + stepY; y += stepY, r++) for (let x = (r % 2 ? stepX / 2 : 0); x < fr.w + stepX; x += stepX) centers.push([x, y]);
           } else {
-            const ext = Math.abs(opts.rotation) === 90 ? { w: h, h: w } : Math.abs(opts.rotation) === 45 ? { w: (w + h) * 0.71, h: (w + h) * 0.71 } : { w, h };
+            const ext = opts.rotation === 90 || opts.rotation === 270 ? { w: h, h: w } : Math.abs(opts.rotation) === 45 ? { w: (w + h) * 0.71, h: (w + h) * 0.71 } : { w, h };
             const a = anchorFor(opts.pos, fr.w, fr.h, ext.w, ext.h, 24);
             centers.push([a.x + ext.w / 2, a.y + ext.h / 2]);
           }
@@ -830,6 +854,7 @@ const EDIT = [
             if (img) drawImageVisual(page, img, { x: cx - w / 2, y: cy - h / 2, w, h, opacity: op, rotateDeg: opts.rotation, frame: fr });
             else drawTextVisual(page, text, { font, size, color: hexToRgb(opts.color), opacity: op, rotateDeg: opts.rotation, cx, cy, frame: fr });
           }
+          if (opts.layer === 'under') sendToBack(page);
         }
         outputs.push(pdfOut(outName(files[fi], 'filigrana'), await savePdf(doc)));
       }

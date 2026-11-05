@@ -26,9 +26,9 @@ const ORGANIZE = [
     id: 'unisci-pdf', cat: 'organizza', icon: 'merge', name: 'Unisci PDF',
     desc: 'Combina più PDF nell\'ordine che vuoi, in un solo documento.',
     keywords: 'merge combina unire',
-    multiple: true, orderMatters: true, minFiles: 2, minFilesMsg: 'Aggiungi almeno 2 PDF da unire.',
+    multiple: true, orderMatters: true, rotateFiles: true, minFiles: 2, minFilesMsg: 'Aggiungi almeno 2 PDF da unire.',
     action: 'Unisci PDF', working: 'Unione dei PDF',
-    sideIntro: 'Trascina i file (o usa le frecce) per decidere l\'ordine.',
+    sideIntro: 'Trascina i file (o usa le frecce) per decidere l\'ordine. Con i pulsanti sotto ogni file lo ruoti di 90° o 180°.',
     options: [
       { key: 'blankOdd', type: 'checkbox', label: 'Aggiungi una pagina vuota dopo i file con pagine dispari (utile per la stampa fronte-retro)', default: false },
     ],
@@ -38,7 +38,8 @@ const ORGANIZE = [
         progress(i / files.length, files[i].name);
         const src = await loadPdfLib(files[i].bytes);
         const pages = await out.copyPages(src, src.getPageIndices());
-        pages.forEach((p) => out.addPage(p));
+        const rot = files[i].rot || 0;
+        pages.forEach((p) => { if (rot) p.setRotation(degrees(((p.getRotation().angle || 0) + rot) % 360)); out.addPage(p); });
         if (opts.blankOdd && pages.length % 2 === 1 && i < files.length - 1) {
           const last = pages[pages.length - 1].getSize();
           out.addPage([last.width, last.height]);
@@ -59,7 +60,12 @@ const ORGANIZE = [
         { value: 'fixed', label: 'Ogni N pagine', desc: 'Blocchi della stessa lunghezza' },
         { value: 'each', label: 'Una pagina per file', desc: 'Ogni pagina diventa un PDF' },
         { value: 'half', label: 'A metà', desc: 'Due file con metà delle pagine' },
+        { value: 'select', label: 'Estrai pagine', desc: 'Solo le pagine che scegli' },
+        { value: 'size', label: 'Per dimensione', desc: 'Peso massimo per file (es. per le email)' },
       ] },
+      { key: 'pagesSel', type: 'text', label: 'Pagine da estrarre', default: '1', placeholder: 'es. 1, 3, 5-7', help: 'Numeri o intervalli separati da virgola.', showIf: (v) => v.mode === 'select' },
+      { key: 'mergeSel', type: 'checkbox', label: 'Unisci le pagine estratte in un unico PDF', default: false, showIf: (v) => v.mode === 'select' },
+      { key: 'maxMb', type: 'number', label: 'Peso massimo di ogni file (MB)', default: 5, min: 0.1, step: 0.1, help: `Il file attuale pesa ${ctx.files[0] ? fmtSize(ctx.files[0].size) : '?'}.`, showIf: (v) => v.mode === 'size' },
       { key: 'ranges', type: 'text', label: 'Intervalli', default: ctx.files[0] && ctx.files[0].pages > 1 ? `1-${Math.ceil(ctx.files[0].pages / 2)}, ${Math.ceil(ctx.files[0].pages / 2) + 1}-${ctx.files[0].pages}` : '1', help: `Ogni intervallo diventa un file. Il documento ha ${ctx.files[0] ? ctx.files[0].pages : '?'} pagine.`, showIf: (v) => v.mode === 'ranges' },
       { key: 'mergeRanges', type: 'checkbox', label: 'Unisci tutti gli intervalli in un unico PDF', default: false, showIf: (v) => v.mode === 'ranges' },
       { key: 'every', type: 'number', label: 'Pagine per file', default: 2, min: 1, showIf: (v) => v.mode === 'fixed' },
@@ -77,12 +83,28 @@ const ORGANIZE = [
         const h = Math.ceil(total / 2);
         groups = [{ label: `1-${h}`, pages: Array.from({ length: h }, (_, k) => k + 1) }];
         if (total > h) groups.push({ label: `${h + 1}-${total}`, pages: Array.from({ length: total - h }, (_, k) => h + 1 + k) });
+      } else if (opts.mode === 'select') {
+        const sel = [...new Set(parseRanges(opts.pagesSel, total))].sort((a, b) => a - b);
+        groups = opts.mergeSel ? [{ label: 'selezione', pages: sel }] : sel.map((p) => ({ label: String(p), pages: [p] }));
+      } else if (opts.mode === 'size') {
+        const limit = Math.max(0.05, +opts.maxMb || 5) * 1048576;
+        const sizes = [];
+        for (let i = 1; i <= total; i++) {
+          progress(((i - 1) / total) * 0.5, `Misuro la pagina ${i} di ${total}`);
+          const one = await PDFDocument.create();
+          one.addPage((await one.copyPages(src, [i - 1]))[0]);
+          sizes.push((await one.save()).length);
+        }
+        let cur = [], acc = 0;
+        const push = () => { if (cur.length) groups.push({ label: cur.length === 1 ? String(cur[0]) : `${cur[0]}-${cur[cur.length - 1]}`, pages: cur }); };
+        sizes.forEach((sz, k) => { if (cur.length && acc + sz > limit) { push(); cur = []; acc = 0; } cur.push(k + 1); acc += sz; });
+        push();
       } else for (let i = 1; i <= total; i++) groups.push({ label: String(i), pages: [i] });
       if (!groups.length) throw new Error('Nessun intervallo indicato.');
       if (opts.mode === 'ranges' && opts.mergeRanges) groups = [{ label: 'selezione', pages: groups.flatMap((g) => g.pages) }];
       const outputs = [];
       for (let i = 0; i < groups.length; i++) {
-        progress(i / groups.length, `File ${i + 1} di ${groups.length}`);
+        progress((opts.mode === 'size' ? 0.5 : 0) + (i / groups.length) * (opts.mode === 'size' ? 0.5 : 1), `File ${i + 1} di ${groups.length}`);
         const out = await PDFDocument.create();
         const pages = await out.copyPages(src, groups[i].pages.map((p) => p - 1));
         pages.forEach((p) => out.addPage(p));
