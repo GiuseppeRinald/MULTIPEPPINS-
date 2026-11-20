@@ -11,7 +11,7 @@ let fileSeq = 0;
 /* ================= Navigazione ================= */
 function route() {
   const id = decodeURIComponent(location.hash.slice(1));
-  const tool = TOOLS.find((t) => t.id === id);
+  const tool = TOOLS.find((t) => t.id === id || (t.aliases || []).includes(id));
   if (tool) openTool(tool);
   else renderHome();
   window.scrollTo(0, 0);
@@ -495,7 +495,7 @@ function renderResult(result) {
   if (pdfOuts.length) {
     const chips = el('div', { class: 'chips' });
     const next = TOOLS.filter((t) => t.id !== tool.id && !t.noFiles && (!t.accept || /pdf/.test(t.accept)) && (t.multiple || pdfOuts.length === 1)).slice(0, 40);
-    const preferred = ['comprimi-pdf', 'unisci-pdf', 'proteggi-pdf', 'firma-pdf', 'numeri-pagina', 'filigrana', 'organizza-pdf', 'ruota-pdf', 'dividi-pdf', 'pdf-in-jpg', 'modifica-pdf'];
+    const preferred = ['comprimi-pdf', 'unisci-pdf', 'proteggi-pdf', 'firma-pdf', 'numeri-pagina', 'filigrana', 'organizza-pdf', 'ruota-pdf', 'dividi-pdf', 'pdf-in-jpg', 'jpg-in-pdf', 'modifica-pdf'];
     next.sort((a, b) => (preferred.indexOf(a.id) + 1 || 99) - (preferred.indexOf(b.id) + 1 || 99));
     for (const t of next.slice(0, 8)) {
       chips.append(el('button', { class: 'chip', onclick: () => continueWith(t, pdfOuts) }, icon(t.icon, 14), t.name));

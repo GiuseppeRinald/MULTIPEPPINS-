@@ -166,9 +166,9 @@ function textImportField(accept, label) {
 
 const CONVERT_IN = [
   {
-    id: 'immagini-in-pdf', cat: 'in', icon: 'jpg', name: 'Immagini in PDF',
-    desc: 'Trasforma foto JPG, PNG e altre immagini in un PDF.',
-    keywords: 'jpg png foto immagine converti',
+    id: 'jpg-in-pdf', aliases: ['immagini-in-pdf'], cat: 'in', icon: 'jpg', name: 'JPG in PDF',
+    desc: 'Converti immagini JPG in PDF. Funziona anche con PNG e altre foto.',
+    keywords: 'jpg jpeg png foto immagine immagini converti da jpg a pdf trasforma',
     accept: 'image/*,.jpg,.jpeg,.png,.webp,.gif,.bmp', multiple: true, orderMatters: true, rotateFiles: true,
     pickLabel: 'Seleziona le immagini', action: 'Converti in PDF', working: 'Creazione del PDF',
     options: [...pageLayoutOpts(true), { key: 'merge', type: 'checkbox', label: 'Unisci tutte le immagini in un solo PDF', default: true }],

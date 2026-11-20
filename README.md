@@ -9,7 +9,7 @@ Tutto funziona **nel browser**: i file non vengono mai caricati su un server.
 |---|---|
 | Organizza | Unisci PDF · Dividi PDF · Rimuovi pagine · Estrai pagine · Organizza PDF · Ruota PDF |
 | Ottimizza | Comprimi PDF · OCR PDF · Ripara PDF · PDF in bianco e nero |
-| Converti in PDF | Immagini in PDF · Scansiona in PDF · Word in PDF · Excel in PDF · PowerPoint in PDF · Testo in PDF · HTML in PDF |
+| Converti in PDF | JPG in PDF · Scansiona in PDF · Word in PDF · Excel in PDF · PowerPoint in PDF · Testo in PDF · HTML in PDF |
 | Converti da PDF | PDF in JPG/PNG · PDF in Word (con OCR) · PDF in PowerPoint · PDF in Excel (con OCR) · PDF in testo · PDF in Markdown · PDF in PDF/A (1b, 2b, 3b) |
 | Modifica | Modifica PDF · Firma PDF · Filigrana · Numeri di pagina · Ritaglia PDF · Ridimensiona pagine · Più pagine per foglio · Compila moduli · Proprietà del PDF |
 | Sicurezza | Proteggi PDF · Sblocca PDF · Censura PDF · Appiattisci PDF |
@@ -22,12 +22,13 @@ Apri **https://giusepperinald.github.io/MULTIPEPPINS-/** e premi **Installa app*
 
 ## Novità
 
+- **JPG in PDF**: lo strumento "Immagini in PDF" ora si chiama come su iLovePDF e si apre anche da `#jpg-in-pdf`
 - **Unisci PDF**: ruota ogni file di 90° a sinistra, 90° a destra o 180° prima di unirlo (o tutti insieme)
 - **Firma PDF → Timbri**: archivio di timbri aziendali con nome, ricerca, rinomina, esportazione/importazione per i colleghi; ricorda la dimensione di ogni timbro
 - **Organizza PDF**: ruota a sinistra/destra, pagina vuota dopo una pagina qualsiasi, ordina A→Z o 1→9, mischia le pagine di più file
 - **Dividi PDF**: nuove modalità "Estrai pagine" e "Per dimensione" (peso massimo per file)
 - **Filigrana**: sopra o sotto il contenuto, inclinazione anche 180° e 270°
-- **Immagini in PDF / Scansiona**: ruota ogni foto prima della conversione
+- **JPG in PDF / Scansiona**: ruota ogni foto prima della conversione
 
 ## Come avviarla in locale
 

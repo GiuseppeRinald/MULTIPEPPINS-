@@ -1,7 +1,7 @@
 // MULTIPEPPINS — funziona anche offline una volta installata.
 // Codice dell'app: prima la rete (così gli aggiornamenti arrivano subito), poi la copia salvata.
 // Librerie in vendor/: prima la copia salvata (sono grandi e non cambiano).
-const CACHE = 'multipeppins-v1';
+const CACHE = 'multipeppins-v2';
 const CORE = ['./', 'index.html', 'css/style.css', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png',
   'js/app.js','js/core.js','js/crypto.js','js/editor.js','js/fonts.js','js/helpers.js','js/layout.js','js/ocr-worker.js','js/ocr.js','js/pages.js','js/pdfa.js','js/pptx.js','js/stamps.js','js/tools.js','js/tools2.js','js/tools3.js','js/ui.js',
   'vendor/pdf-lib.min.js', 'vendor/pdf.min.mjs', 'vendor/pdf.worker.min.mjs'];
